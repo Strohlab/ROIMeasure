@@ -1,7 +1,24 @@
-% ROI time measurement and dF/F tool
-% Zeke Barger
+%% ROI time measurement and dF/F tool
+% Stroh-Lab
+% Zeke Barger, Hirofumi Watari, Saleh Altahini
+
+%% Preset
+% Fill the following parameters to skip the question dialogs
+% or leave empty to show the prompts
 
 pathName='';    % keep track of selected directory
+
+ftype=2; %1=TIFF stack  2=image sequence
+img1=0; %1=create average image     2=choose existing image
+imgWidthMicron=0; %image width in microns
+hz=0; %imaging frequency
+
+
+%% Data Loading
+
+
+rois={};        % empty table to load ROIs into
+
 loadrois=[];
 choice=questdlg('How do you want to start?','Region of interest',...
     'Draw new ROIs','Load saved ROIs','Cancel','Draw new ROIs');
@@ -14,29 +31,10 @@ switch choice
         disp('User canceled');
         return
 end
-%%
 
-% commented by ER. we use only .tiff sequences
-ftype=2;
-% disp(' '); disp('Are your data in a...');
-% ftype=[];
-% while isempty(ftype)
-%     ftype=input('(1) TIFF stack [one file] or (2) image sequence [many TIFF files]? ');
-%     if ~isempty(ftype)
-%         if ftype ~= 1 && ftype ~= 2
-%             ftype=[];
-%         end
-%     end
-% end
-
-% do other prompts first. commented by ER. we don't use birght field images
-% regularly.
-img1=2; %picked average image
-
-
-
-if loadrois % get saved rois
-%    disp('Select your saved ROI .mat file');
+% get saved rois
+if loadrois 
+    disp('Select your saved ROI .mat file');
     isDone=0;
     while ~isDone
         [fname1 path1]=uigetfile('*.mat','Select the MATLAB file containing the ROIs');
@@ -49,7 +47,7 @@ if loadrois % get saved rois
         load(strcat(path1,fname1));
         if exist('rois','var')
             isDone=1;
-            numrois=size(rois,2)-1;
+            numrois=size(rois,2);
         else
             uiwait(warndlg('ROI is not in this file. Try again','Wrong MATLAB file'));
         end
@@ -57,7 +55,7 @@ if loadrois % get saved rois
 end
 
 
-%% load files, except not
+% load files, except not
 
 disp(' ');
 if ftype==1
@@ -73,7 +71,7 @@ if ftype==1
 
 else
     % Open image sequence using gui 
-    %disp('Select the directory of your image sequence (must not be RGB)')
+    disp('Select your folder containing a sequence of images');
     isDone=0;
     while ~isDone
         mydir=uigetdir(pathName,'Select a folder containing a sequence of images (non-RGB)');            %use graphical user interface to set file path in mydir
@@ -92,7 +90,7 @@ else
     size_first=size(first);                                        %get size of first image to preallocate space for imported images
     num_images=length(dirlist);
     
-    %% Save imgWidth and imgHeight by Hiro (vers 2D)
+    % Save imgWidth and imgHeight
     [imgHeight,imgWidth]=size(first);
 
     % extract folder name (to be used as a base file name later)
@@ -101,14 +99,23 @@ else
 
 end
 
+if img1==0
+    choice=questdlg('what do you want to use?','Average Image',...
+    'Create average image','Choose existing image','Cancel','Create average image');
+    switch choice
+        case 'Create average image'
+            img1=2;
+        case 'Choose existing image'
+            img1=1;
+        case 'Cancel'
+            disp('User canceled');
+            return
+    end
+end
 
-%%
+% Average Image Dialog
 if img1==2
-
-    
-    %% Import method by Hiro 22.02.2016
-    % Average intensity using all images
-    
+    % Create average intensity using all images
     imgFrom=1;
     imgTo=num_images;
     isDone=0;
@@ -173,11 +180,11 @@ if img1==2
     
 
 else
-    % ask for new image, making sure it has the same dimensions
+    % ask for exsiting image, making sure it has the same dimensions
     first2=[0 0];
-    disp(' '); disp('Select the brightfield/other image. The dimensions must match the film');
+    disp(' '); disp('Select the average image. The dimensions must match the film');
     while [size(first,1) size(first,2)] ~= [size(first2,1) size(first2,2)]  
-        [fname2,pname2]=uigetfile('*.*','Brightfield/average image');
+        [fname2,pname2]=uigetfile(strcat(pathName,'/*.*'),'Brightfield/average image');
         info2 = imfinfo(cat(2,pname2,fname2));
         num_images2 = numel(info2);
         first2 = imread(cat(2,pname2,fname2), 1, 'Info', info2);
@@ -188,25 +195,24 @@ else
 end
 
 
-%% vers 3 ask the width in micrometer
-imgWidthMicron=0;
-prompt = {['Image width is ',num2str(imgWidth),' pixels. What is the width in micrometer?']};
-dlg_title = 'Image scale';
-num_lines = 1;
-def = {num2str(imgWidthMicron)};
-answer = inputdlg(prompt,dlg_title,num_lines,def);
-if ~isempty(answer)
-    imgWidthMicron=str2double(answer{1});
-else
-    disp('User canceled');
-    return
+% ask the width in micrometer
+if imgWidthMicron==0
+    prompt = {['Image width is ',num2str(imgWidth),' pixels. What is the width in micrometer?']};
+    dlg_title = 'Image scale';
+    num_lines = 1;
+    def = {num2str(imgWidthMicron)};
+    answer = inputdlg(prompt,dlg_title,num_lines,def);
+    if ~isempty(answer)
+        imgWidthMicron=str2double(answer{1});
+    else
+        disp('User canceled');
+        return
+    end
 end
 
 
-%% Prompt for sampling frequency
-hz=0;
-isDone=0;
-while ~isDone
+% Prompt for sampling frequency
+if hz==0
     prompt = {'Frame rate (Hz)'};
     dlg_title = 'Enter frame rate';
     num_lines = 1;
@@ -225,42 +231,43 @@ while ~isDone
 end
 
 
-%%
+%% Load Saved ROIs
 intensity=[];
 pixels=[];
 mask2={};
 maskedvec=[];
 
-if loadrois % get saved rois
+if loadrois 
 
     cellfig=figure;
     colormap(gray);
     imagesc(first2);
     axis image;
-    
-    firstP=rois{1}.getPosition();
-    firstROI=impoly(gca,firstP,'closed',true);
-    setVerticesDraggable(firstROI,false);
-    
-    %% New UI by Hiro (vers 2D)
+
+    firstROI=images.roi.Freehand(gca,'Position',rois{1}.Position);
     set(gca,'XTickLabel',[]);
     set(gca,'XTick',[]);
     set(gca,'YTickLabel',[]);
     set(gca,'YTick',[]);
-    xlabel({'Optionally move ROI #1 to a new location.';'Hit Esc-key (or double-click inside the ROI) when done.'});
-    firstP2=wait(firstROI);
-    if isempty(firstP2)
-        % Esc key returns an empty position. Get it now.
-        firstP2=firstROI.getPosition();
+    xlabel({'Optionally move ROI #1 to a new location.';'Double-click the ROI when done.'});
+    ddd=get(gcf,'Position'); % make the figure window play nice
+    wait(firstROI);
+    if firstROI.Position ~= rois{1}.Position
+        correct_drift = true;
+        firstP = rois{1}.Position;
+        firstP2=firstROI.Position;
+        drift=[firstP2(1,1)-firstP(1,1) firstP2(1,2)-firstP(1,2)]; % change in position
+    else
+        correct_drift = false;
     end
-    
-    %%
-    drift=[firstP2(1,1)-firstP(1,1) firstP2(1,2)-firstP(1,2)]; % change in position
     delete(firstROI);
+    
     
     hh2 = waitbar(0,'Loading ROIs...');
 
     for i=1:numrois
+        if correct_drift
+            error('Not done!!');
         fulllist=rois{i}.getPosition();
         fulllist=fulllist+repmat(drift,size(fulllist,1),1); % correct for drift
         % aim for 40 points in each roi
@@ -275,6 +282,9 @@ if loadrois % get saved rois
         end    
         rois{i}=impoly(gca,fulllist(round(1:step1:size(fulllist,1)),:),'closed',true);
         setVerticesDraggable(rois{i},false);
+        else
+            rois{i}.Parent= gca;
+        end
         waitbar(i/numrois,hh2)
        
     end
@@ -282,14 +292,11 @@ if loadrois % get saved rois
    
 
     pause(.1)
-%% place new rois
-else
-    thisisok=0;
-    while thisisok == 0 % get rois until user is satisfied with them
-        % measure intensity in rois       
-        rois={};
-        texts=[];
-        numrois=[];
+end
+thisisok = 0;
+while thisisok == 0 % get rois until user is satisfied with them
+    % measure intensity in rois       
+    if ~loadrois
         cellfig=figure;
         colormap(gray);
         imagesc(first2);
@@ -299,88 +306,96 @@ else
         set(gca,'YTickLabel',[]);
         set(gca,'YTick',[]);
         xlabel('Press Esc to undo. To finish, Shift-click inside the image, then click outside it');
-        zoom reset
-        
+        zoom reset    
         ddd=get(gcf,'Position'); % make the figure window play nice
-        blah1=get(gca,'XLim');
-        blah2=get(gca,'YLim');
-        fcn = makeConstrainToRectFcn('imfreehand',blah1,blah2);
-
+        
+        
         i=1;
-        quitcount=0;
+        
         set(gcf,'toolbar','figure');
         % while i < (numrois+1)
         uiwait(msgbox({'Click and drag to draw the ROIs.' ...
-            'Hit Esc to undo.' ...
-            'When done, Shift-click inside the image.' ...
-            'and then click outside the image'},'Instructions'));
-
-        while quitcount==0
-            rois{i}=imfreehand('PositionConstraintFcn',fcn);
-            if sum(size(rois{i})) > 0 % user didn't press escape
-                asdf=rois{i}.getPosition;
-                if isempty(asdf)
-                    quitcount=1;
-                else
-                    texts(i)=text(asdf(1,1),asdf(1,2),num2str(i),'HorizontalAlignment',...
-                        'center','BackgroundColor',[.5 .5 .5],'Margin',.01,'FontName','Arial','FontSize',10);
-                    i=i+1;
-                end
-            else % user hit escape, delete the previous roi
-                if i>1
-                    i=i-1;
-                    delete(texts(i));
-                    delete(rois{i});
-                end
-                    
+        'Hit Esc to undo.' ...
+        'When done, Shift-click inside the image.' ...
+        'and then click outside the image'},'Instructions'));
+    else
+        xlabel('Press Esc to undo. To finish, Shift-click inside the image, then click outside it');
+        i = numrois+1;
+    end
+    maxX=get(gca,'XLim');
+    maxY=get(gca,'YLim');
+    quitcount=0;
+    while quitcount==0
+        numrois=size(rois,2);
+        rois{i}=drawfreehand('Color', 'w');
+        if isempty(rois{i}.Position)
+            if i>1
+                i=i-1;
+                delete(rois{i});
+                rois(end) = [];
             end
-        end
-        
-        set(gcf, 'Position', ddd); % make the figure normal size
-        zoom out
-
-  
-        
-        % New UI by Hiro (vers 2C)
-        thisisok=[];
-        choice=questdlg('Happy with the ROIs?','Tell me','Yes','Try again :(','Yes');
-        switch choice
-            case 'Yes'
-                thisisok=1;
-            case 'Try again :('
-                thisisok=0;
-            case ''
-                thisisok=[];
-                disp('User canceled');
-                return
+        else
+            if size(rois{i}.Position) == [1,2] & ~isempty(intersect(rois{i}.Position, [maxX, maxY]))
+                delete(rois{i});
+                rois(end) = [];
+                choice=questdlg('Done?','Tell me','Yes','No','Yes');
+                switch choice
+                case 'Yes'
+                    quitcount=1;
+                    numrois=size(rois,2);
+                case 'No'
+                    quitcount=0;
+                case ''
+                    quitcount=[];
+                    disp('User canceled');
+                    return
+                end
+                
+            else
+                rois{i}.Waypoints = false(size(rois{i}.Waypoints));
+                rois{i}.Label = num2str(i);
+                i=i+1;
+            end
+                
         end
     end
-    
-    numrois=i-1;
-    %possibly save rois
-     disp(' ');
-    
-    saverois=[];
-    choice=questdlg('Save the ROIs?','Save','Yes');
+    set(gcf, 'Position', ddd); % make the figure normal size
+    zoom out
+    % New UI by Hiro (vers 2C)
+    thisisok=[];
+    choice=questdlg('Happy with the ROIs?','Tell me','Yes','Try again :(','Yes');
     switch choice
-        case 'Yes'
-            saverois=1;
-        case 'No'
-            saverois=0;
-            disp('ROI not saved');
-        case 'Cancel'
-            saverois=[];
-            disp('User canceled');
-            return
-    end
-    
-    if saverois
-        %uisave('rois');  
-        uisave('rois',strcat(baseFileName,'.mat'));
-        disp(['ROI saved as ',strcat(baseFileName,'.mat')]);
+    case 'Yes'
+        thisisok=1;
+    case 'Try again :('
+        thisisok=0;
+    case ''
+        thisisok=[];
+        disp('User canceled');
+        return
     end
 end
+    
 
+    
+saverois=[];
+choice=questdlg('Save the ROIs?','Save','Yes');
+switch choice
+	case 'Yes'
+        saverois=1;
+	case 'No'
+        saverois=0;
+        disp('ROI not saved');
+    case 'Cancel'
+        saverois=[];
+        disp('User canceled');
+        return
+end
+    
+if saverois
+    uisave('rois',strcat(baseFileName,'.mat'));
+    disp(['ROI saved as ',strcat(baseFileName,'.mat')]);
+end
 
 %% calculate mean intensity
 disp(' '); disp('Please wait');
@@ -420,30 +435,15 @@ intensity=zeros(numrois,num_images); %preallocate
 
 toc
 
-if loadrois==0 % gotta make this work for both options???
-    % update ROI figure appearance
-    for i=1:numrois
-        roipts=rois{i}.getPosition;
-        roipts(end+1,:)=roipts(1,:);
-        hold on,plot(roipts(:,1),roipts(:,2),'y','LineWidth',0.5);
-        %delete(rois{i});   % Commented out by Hiro 2016-03-02
-        uistack(texts(i),'top'); %move text in front of roi
-    end
-else
-    %just delete rois or something NO
-    h3 = waitbar(0,'Updating ROI appearance...');
-    for i=1:numrois
-        roipts=rois{i}.getPosition;
-        roipts(end+1,:)=roipts(1,:);
-        hold on,plot(roipts(:,1),roipts(:,2),'y','LineWidth',0.5);
-        asdf=rois{i}.getPosition;
-        texts(i)=text(asdf(1,1),asdf(1,2),num2str(i),'HorizontalAlignment',...
-           'center','BackgroundColor',[.5 .5 .5],'Margin',.01,'FontName','Arial','FontSize',10);   
-        %delete(rois{i});    % Commented out by Hiro 2016-03-02
-        waitbar(i/numrois,h3)
-    end
-    close(h3)
+%% Update ROIs figure
+
+h3 = waitbar(0,'Updating ROI appearance...');
+for i=1:numrois
+    rois{i}.Color = 'y';
+    rois{i}.LineWidth = 0.5;
+    waitbar(i/numrois,h3)
 end
+close(h3)
 
 time=(0:1:num_images-1)/hz;
 
@@ -473,7 +473,7 @@ offset=[];
     barf=axis;
     set(gcf,'toolbar','figure');
     
-    %% new plot code
+    % new plot code
     zoom reset
  
     % add scroll and zoom buttons on each axis
@@ -523,7 +523,7 @@ offset=[];
 
 
 
-%% New UI by Hiro (vers 2C)
+% New UI by Hiro (vers 2C)
 dodff=[];
 choice=questdlg('Convert to dF/F?','dF/F','Yes');
 switch choice
@@ -585,7 +585,7 @@ if dodff
     end
 % close(rawtraces);
 
-    %% choose dF/F method
+    % choose dF/F method
     disp(' ');
     disp('Choose dF/F calculation method: ');
     disp('1. Standard (divide by the baseline of each ROI)');
@@ -692,7 +692,7 @@ if dodff
     
     barf=axis; 
     set(gcf,'toolbar','figure');
-    %% new plot code, condensed
+    % new plot code, condensed
     zoom reset
  
     % add scroll and zoom buttons on each axis
@@ -753,7 +753,7 @@ if saving ~=4
         dlmwrite(strcat(fname,'_original.txt'), intensity', 'delimiter','\t','newline','pc');
         disp([strcat(fname,'_original.txt'),' saved in ',pname]);
         
-        %% Mat2Igor binary by Hiro (vers 3)
+        % Mat2Igor binary by Hiro (vers 3)
         HiroMat2Igor(fname,hz,0,intensity,imgWidthMicron,imgWidth,imgHeight,rois);
     end
     if saving==2 || saving==3
