@@ -1,39 +1,6 @@
 % ROI time measurement and dF/F tool
 % Zeke Barger
-%
-% Updates
-% vers 3beta2 16.04.13 Supports the updated Mat2Igor plug-in (Hiro Watari)
-% vers 3beta  16.03.16 Supports Hiro's Mat2Igor plug-in (Hiro Watari)
-% vers 2D 16.03.16 Customized UI for an improved workflow (Hiro Watari)
-% vers 2C 08.03.16 Customized UI for an improved workflow (Hiro Watari)
-% vers 2B 24.02.16 Allow the user to pick a range of consecutive images to average (Hiro Watari)
-% vers 2A 22.02.16 Imports thousands (millions) of images without crashing (Hiro Watari)
-% vers ?  25.03.14 (last change = drift correction)
 
-% disp(' '); disp(' ');
-% disp('   For each prompt, enter the number of your');
-% disp('      selection and press the enter key.');
-% [user,sys] = memory;
-% disp(cat(2,'         Available memory: ',num2str(sys.PhysicalMemory.Available/1000000000),' GB'));
-% disp(' ');
-
-% hz=[];
-% while isempty(hz)
-%     hz=input('Enter framerate (Hz): ');
-% end
-
-% disp(' ');
-% loadrois=[];
-% while isempty(loadrois)
-%     loadrois=input('(1) Draw new ROIs or (2) load saved ROIs : ')-1;
-%     if ~isempty(loadrois)
-%         if loadrois ~= 0 && loadrois ~= 1
-%             loadrois=[];
-%         end
-%     end
-% end
-
-%% New UI by Hiro (vers 2C)
 pathName='';    % keep track of selected directory
 loadrois=[];
 choice=questdlg('How do you want to start?','Region of interest',...
@@ -65,16 +32,7 @@ ftype=2;
 % do other prompts first. commented by ER. we don't use birght field images
 % regularly.
 img1=2; %picked average image
-% disp(' ');
-% img1=[];
-% while isempty(img1)
-%     img1=input('Place ROIs on 1) brightfield/other image, 2) average image : ');
-%     if ~isempty(img1)
-%         if img1 ~= 1 && img1 ~= 2
-%             img1=[];
-%         end
-%     end
-% end
+
 
 
 if loadrois % get saved rois
@@ -100,7 +58,6 @@ end
 
 
 %% load files, except not
-% enoughMem=1;
 
 disp(' ');
 if ftype==1
@@ -113,23 +70,7 @@ if ftype==1
     
     baseFileName=fname;
     pathName=pname;
-%     try
-%         
-%     stack=zeros(size_first(:,1),size_first(:,2),num_images);
-%     h = waitbar(0,'Loading images...');
-%     for k = 1:num_images
-%         stack(:,:,k) = imread(cat(2,pname,fname), k, 'Info', info);
-%         waitbar(k/num_images,h)
-%     end
-%     close(h)
-%     
-%     catch
-%         
-%         disp('Not enough memory to load the sequence.');
-%         disp('Performance may suffer.');
-%         enoughMem=0;
-%         
-%     end
+
 else
     % Open image sequence using gui 
     %disp('Select the directory of your image sequence (must not be RGB)')
@@ -157,37 +98,13 @@ else
     % extract folder name (to be used as a base file name later)
     [pathName,baseFileName,ext]=fileparts(mydir);
     
-%     try
-%     
-%     stack=zeros(size_first(:,1),size_first(:,2),num_images);  %preallocate space for images
-% 
-%     % create stack for images from dirlist
-%     h = waitbar(0,'Loading images...');
-%     for i=(1:length(dirlist(:)))
-%         stack(:,:,i)=imread(strcat(mydir,filesep,dirlist(i).name));
-%         waitbar(i/num_images,h)
-%     end
-%     close(h)
-%     
-%     catch
-%         
-%         disp('Not enough memory to load the sequence.');
-%         disp('Performance may suffer.');
-%         enoughMem=0;
-%         
-%     end
+
 end
 
 
 %%
 if img1==2
-%    % find average image using first quarter of stack
-%     num2avg=round(num_images/4);
-%     if num2avg > 500 % but not more than 200 images. 
-%         %edited by ERJ: I added 500 imgs to capture cells inactive during
-%         %thefirst 200 pics
-%        num2avg=500; 
-%     end
+
     
     %% Import method by Hiro 22.02.2016
     % Average intensity using all images
@@ -216,38 +133,30 @@ if img1==2
                 disp(['Averaging ',num2str(num2avg),' images (from ',num2str(imgFrom),' to ',num2str(imgTo),')']);
             end
         else
-%             isDone=1;
-%             num2avg = num_images;
-%             disp(strcat('Averaging all (',num2str(num2avg),') images'));
+
             disp('User canceled');
             return
         end
     end
-    %tic;
+
     h60 = waitbar(0,'Creating average image');
     [i,j]=size(first);
     newimg=zeros(i,j);
     sumimg=zeros(i,j,'uint64');
-    %matlabpool
     if ftype==1
         for ii=imgFrom:imgTo
-        %for ii=1:num2avg
-        %parfor ii=1:num2avg
             newimg=imread(cat(2,pname,fname),ii,'Info',info);
             sumimg=sumimg+uint64(newimg);
             waitbar(ii/num2avg,h60)
         end
     else
         for ii=imgFrom:imgTo
-        %for ii=1:num2avg
-        %parfor ii=1:num2avg
             newimg=imread(strcat(mydir,filesep,dirlist(ii).name));
             sumimg=sumimg+uint64(newimg);
             waitbar(ii/num2avg,h60)
         end
     end
     
-    %matlabpool close
     first2=zeros(i,j);
     first2=sumimg/num2avg;
     
@@ -260,31 +169,9 @@ if img1==2
         return
     end
     close(h60)
-    %toc;
     % Ends Hiro's import method
     
-    %% Deprecated because it crashes due to out of memory
-%     if enoughMem %analyse stack
-%         first2=mean(stack(:,:,1:num2avg),3);
-%     else % load in the first few images
-%         h60 = waitbar(0,'Creating average image');
-%         ministack=zeros(size_first(:,1),size_first(:,2),num2avg);
-%         
-%         if ftype==1
-%             for i=1:num2avg
-%                 ministack(:,:,i) = imread(cat(2,pname,fname), i, 'Info', info);
-%                  waitbar(i/num2avg,h60)
-%             end
-%             first2=mean(ministack(:,:,1:num2avg),3);
-%         else
-%             for i=1:num2avg
-%                 ministack(:,:,i)=imread(strcat(mydir,filesep,dirlist(i).name));
-%                  waitbar(i/num2avg,h60)
-%             end
-%             first2=mean(ministack(:,:,1:num2avg),3);
-%         end
-%         close(h60)
-%     end
+
 else
     % ask for new image, making sure it has the same dimensions
     first2=[0 0];
@@ -303,9 +190,6 @@ end
 
 %% vers 3 ask the width in micrometer
 imgWidthMicron=0;
-%strPrompt=['Image width is ',num2str(imgWidth),' pixels. What is the width in micrometer?'];
-%prompt = {'Image width (micrometer)'};
-%prompt = {strPrompt};
 prompt = {['Image width is ',num2str(imgWidth),' pixels. What is the width in micrometer?']};
 dlg_title = 'Image scale';
 num_lines = 1;
@@ -348,25 +232,17 @@ mask2={};
 maskedvec=[];
 
 if loadrois % get saved rois
-%     [fname1 path1]=uigetfile('*.*','Your saved ROIs');
-%     load(cat(2,path1, fname1));
-%     numrois=size(rois,2)-1;
+
     cellfig=figure;
     colormap(gray);
     imagesc(first2);
     axis image;
-    %axis off;
     
     firstP=rois{1}.getPosition();
     firstROI=impoly(gca,firstP,'closed',true);
     setVerticesDraggable(firstROI,false);
-    %uiwait(msgbox({'If necessary, move ROI 1 to correct for drift.' ...
-    %    'Then press enter in the command window'}));
-    %trash=input('If necessary, move ROI 1 to correct for drift. Then press enter here');
     
     %% New UI by Hiro (vers 2D)
-    %uiwait(msgbox({'Optionally move ROI #1 to a new location.' ...
-    %    'Then, double-click inside the ROI (or hit Esc-key).'},'Drift correction','modal'));
     set(gca,'XTickLabel',[]);
     set(gca,'XTick',[]);
     set(gca,'YTickLabel',[]);
@@ -398,9 +274,7 @@ if loadrois % get saved rois
             end
         end    
         rois{i}=impoly(gca,fulllist(round(1:step1:size(fulllist,1)),:),'closed',true);
-%         test=impoly(gca,fulllist(round(1:step1:size(fulllist,1)),:),'closed',true);
         setVerticesDraggable(rois{i},false);
-%         setVerticesDraggable(test,false);
         waitbar(i/numrois,hh2)
        
     end
@@ -465,16 +339,7 @@ else
         set(gcf, 'Position', ddd); % make the figure normal size
         zoom out
 
-%         disp(' ');
-%         thisisok=[];
-%         while isempty(thisisok) % possibly redo the whole thing
-%             thisisok=abs(input('Do these ROIs look ok? 1=yes, 2=restart : ')-2);
-%             if ~isempty(thisisok)
-%                 if thisisok ~= 0 && thisisok ~= 1
-%                     thisisok=[];
-%                 end
-%             end
-%         end        
+  
         
         % New UI by Hiro (vers 2C)
         thisisok=[];
@@ -494,15 +359,6 @@ else
     numrois=i-1;
     %possibly save rois
      disp(' ');
-%     saverois=[];
-%     while isempty(saverois)
-%         saverois=abs(input('Do you want to save these ROIs for later? 1=yes, 2=no : ')-2);
-%         if ~isempty(saverois)
-%             if saverois ~= 0 && saverois ~= 1
-%                 saverois=[];
-%             end
-%         end
-%     end
     
     saverois=[];
     choice=questdlg('Save the ROIs?','Save','Yes');
@@ -537,29 +393,13 @@ for i=1:numrois % make logical mask for each roi
     labelimg=labelimg+i*mask2{i}; %tag pixels in label image
 end
 labelog=logical(labelimg);
-%totalmask=repmat(labelog,[1,1,num_images]); %make the mask 3d
 [aa bb cc]=find(labelimg); % get pixels contained in rois
 labelpx=length(cc); % find number of total pixels contained
 
 intensity=zeros(numrois,num_images); %preallocate
-%maskedvec=stack(totalmask); %apply mask to df stack (produces huge vector)
-%maskedmat=vec2mat(stack(totalmask),labelpx);
 
-% if enoughMem
-% % gigantic step, gets all intensity values for all roi pixels in all frames
-% maskedmat=transpose(reshape(stack(totalmask),labelpx,num_images));
-% for i=1:num_images
-%     for j=1:numrois
-%         intensity(j,i)=mean(maskedmat(i,cc==j));
-%     end
-% end
-% 
-% else %need to load each file and process it
-%note:we need to re-sort dirlist, to deal with problem of file sorting 
-%following ascii criteria(1999,10000,...,2000). 
-%lines included by ERJ, 10.02.2015.
-%I'll call extern.func. nat_sort and leave older lines untouched.
-% dirlist1=dirlist;
+
+
 [dirlist,~] = sort_nat({dirlist.name}'); %dirlist changes from struct to cell
     
     h50 = waitbar(0,'Calculating...');
@@ -567,8 +407,6 @@ intensity=zeros(numrois,num_images); %preallocate
         if ftype==1
             img = imread(cat(2,pname,fname), i, 'Info', info);
         else
-            %img=imread(strcat(mydir,filesep,dirlist(i).name));
-            %line commented out, diff indexing for cell type.
             img=imread(strcat(mydir,filesep,dirlist{i}));
         end
         
@@ -579,7 +417,6 @@ intensity=zeros(numrois,num_images); %preallocate
         waitbar(i/num_images,h50)
     end
     close(h50);
-% end
 
 toc
 
@@ -609,20 +446,16 @@ else
 end
 
 time=(0:1:num_images-1)/hz;
-% disp(' '); % plotting in multiple figures was not so good
-% pmeth=input('Plot traces in one figure (1) or multiple windows (2)? ');
-% if isempty(pmeth)
+
     pmeth = 1;
-% end
+
 %% plot traces
 offset=[];
-% if pmeth==1
     rawtraces=figure;
     % find a buffer between traces
     buffer=0.1*(max(intensity(1,:))-min(intensity(1,:)));
     offset(1)=0;
     roitext=[];
-    %plot(time,intensity(1,:))
     roitext(1)=text(0,max(intensity(1,1:9)),'1 ','HorizontalAlignment','right');
     for i=2:numrois
         % find offset so traces don't overlap, plus the small buffer
@@ -687,16 +520,7 @@ offset=[];
     set(gcf,'units','pixels')
     
 
-% disp(' ');
-% dodff=[];
-% while isempty(dodff)
-%     dodff=abs(input('convert to %dF/F? 1=yes 2=no : ')-2);
-%     if ~isempty(dodff)
-%         if dodff ~= 0 && dodff ~= 1
-%             dodff=[];
-%         end
-%     end
-% end   
+
 
 
 %% New UI by Hiro (vers 2C)
@@ -716,17 +540,6 @@ end
 
 %% convert to dF/F
 if dodff
-%     disp(' ');
-%     disp('Draw a rectangle and position it around a part of the trace where');
-%     disp('there is no activity. The top and bottom bounds do not matter.');
-%     disp(' ');
-%     disp('INSTRUCTIONS: Choose which parts of the traces to use as baselines.');
-%     disp('Begin by drawing a rectangle where the traces are flat. Include as');
-%     disp('many traces as you want. You will be able to draw more rectangles'); 
-%     disp('until all traces are selected. Press ENTER when you are satisfied');
-%     disp('with each rectangle.');
-%     disp('Press enter to continue...');
-%     input('');
     
     % New UI by Hiro (vers 2C)
     uiwait(msgbox({'Your job is to select the baseline:' ...
@@ -780,15 +593,7 @@ if dodff
     disp('2. There is no option 2')
     disp('3. Divide by averaging intensity of all ROIs in baseline frames')
     disp('4. Option 3 but with 30% weighting for ROI baselines');
-%     dffmeth=[];
-%     while isempty(dffmeth)
-%         dffmeth=input('Your selection: ');
-%         if ~isempty(dffmeth)
-%             if sum(dffmeth==[1 3 4])==0
-%                 dffmeth=[];
-%             end
-%         end
-%     end 
+
     
     % New UI by Hiro (vers 2C)
     disp(' ');
@@ -831,12 +636,7 @@ if dodff
     end
     
      
-    % old Zeke method
-    % denominator=sum(sum(sum(stack(:,:,xmin:xmax))))/(size_first(:,1)*size_first(:,2)*(xmax-xmin+1));
-    
-    % newer dF/F0 calculation, not perfect: 
-    % dF = signal - avg value of baseline section
-    % F0 = average intensity of entire image in all baseline frames
+
     %%
     delf=[];
     for i=1:numrois
@@ -849,14 +649,10 @@ if dodff
         if dffmeth==4
             delf(i,:)=100*(intensity(i,:) - blavg(i))/newdenom(i);
         end
-       % very old Zeke method
-       % delf(i,:)=100*(intensity(i,:) - mean(intensity(i,xmin:xmax)))/denominator; 
        
     end
     
-%     if pmeth==1
-%        close(rawtraces); 
-%     end
+
     figure
     offset=[];
     buffer=0.1*(max(delf(1,:))-min(delf(1,:)));
@@ -865,7 +661,6 @@ if dodff
     roitext(1)=text(0,max(delf(1,1:10)),'1 ','HorizontalAlignment','right');
     for i=2:numrois
         offset(i)=0-max(delf(i,:))+min(delf(i-1,:)-buffer+offset(i-1));
-        %hold on, plot(time,intensity(i,:)+offset(i))
         roitext(i)=text(0,max(delf(i,1:10)+offset(i)),cat(2,num2str(i),' '),'HorizontalAlignment','right');
     end
     offsetdff=transpose(delf)+transpose(repmat(transpose(offset(:,:)),1,num_images));
@@ -923,16 +718,7 @@ if dodff
       
 end
 %%
-% disp(' ');
-% saving=[];
-% while isempty(saving)
-%     saving=input('(For Igor) 1) save original, 2) save dF/F, 3) save both, 4) exit : ');
-%     if ~isempty(saving)
-%         if saving ~= 1 && saving ~= 2 && saving ~= 3 && saving ~= 4
-%             saving=[];
-%         end
-%     end
-% end   
+
 
 % New UI by Hiro (vers 2C)
 saving=[];
@@ -950,11 +736,7 @@ end
 
 if saving ~=4
      disp(' ');
-%     mydir=uigetdir('','Where to save?');
-%     fname=[]; 
-%     while isempty(fname)
-%         fname=input('Enter base filename: ','s');
-%     end
+
     
     % New UI by Hiro (vers 2C)
     [fname,pname,filterIndex]=uiputfile(strcat(baseFileName,'.txt'),'Save for Igor Pro');
@@ -966,11 +748,8 @@ if saving ~=4
     fname=baseFileName;
     
     curdir=cd;
-    %cd(mydir)
     cd(pname)
     if saving==1 || saving==3
-        %dlmwrite(cat(2,fname,'_original','.txt'), intensity', 'delimiter','\t','newline','pc');
-        %disp(cat(2,'Saving ',fname,'_original','.txt'));
         dlmwrite(strcat(fname,'_original.txt'), intensity', 'delimiter','\t','newline','pc');
         disp([strcat(fname,'_original.txt'),' saved in ',pname]);
         
@@ -978,8 +757,6 @@ if saving ~=4
         HiroMat2Igor(fname,hz,0,intensity,imgWidthMicron,imgWidth,imgHeight,rois);
     end
     if saving==2 || saving==3
-        %dlmwrite(cat(2,fname,'_dFoverF','.txt'), delf', 'delimiter','\t','newline','pc');
-        %disp(cat(2,'Saving ',fname,'_dFoverF','.txt'));
         dlmwrite(strcat(fname,'_dFoverF.txt'), delf', 'delimiter','\t','newline','pc');
         disp([strcat(fname,'_dFoverF.txt'),' saved in ',pname]);
         
