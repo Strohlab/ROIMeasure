@@ -1,3 +1,4 @@
+
 % ROI time measurement and dF/F tool
 % Zeke Barger
 % updated 25.03.14 (last change = drift correction)
@@ -25,34 +26,37 @@ while isempty(loadrois)
     end
 end
 
+% commented by ER. we use only .tiff sequences
+ftype=2;
+% disp(' '); disp('Are your data in a...');
+% ftype=[];
+% while isempty(ftype)
+%     ftype=input('(1) TIFF stack [one file] or (2) image sequence [many TIFF files]? ');
+%     if ~isempty(ftype)
+%         if ftype ~= 1 && ftype ~= 2
+%             ftype=[];
+%         end
+%     end
+% end
 
-disp(' '); disp('Are your data in a...');
-ftype=[];
-while isempty(ftype)
-    ftype=input('(1) TIFF stack [one file] or (2) image sequence [many TIFF files]? ');
-    if ~isempty(ftype)
-        if ftype ~= 1 && ftype ~= 2
-            ftype=[];
-        end
-    end
-end
-
-% do other prompts first
-disp(' ');
-img1=[];
-while isempty(img1)
-    img1=input('Place ROIs on 1) brightfield/other image, 2) average image : ');
-    if ~isempty(img1)
-        if img1 ~= 1 && img1 ~= 2
-            img1=[];
-        end
-    end
-end
+% do other prompts first. commented by ER. we don't use birght field images
+% regularly.
+img1=2; %picked average image
+% disp(' ');
+% img1=[];
+% while isempty(img1)
+%     img1=input('Place ROIs on 1) brightfield/other image, 2) average image : ');
+%     if ~isempty(img1)
+%         if img1 ~= 1 && img1 ~= 2
+%             img1=[];
+%         end
+%     end
+% end
 
 
 if loadrois % get saved rois
     disp('Select your saved ROI .mat file');
-    [fname1 path1]=uigetfile('*.*','Your saved ROIs');
+    [fname1 path1]=uigetfile('C:\Users\pcadmin\Documents\EduardoRosales\Data\*.mat','Your saved ROIs'); % '*.*'
     load(cat(2,path1, fname1));
     numrois=size(rois,2)-1;
 end
@@ -64,7 +68,7 @@ end
 disp(' ');
 if ftype==1
     disp('Select your TIFF stack');
-    [fname,pname]=uigetfile('*.*','Your TIFF stack!');
+    [fname,pname]=uigetfile('C:\Users\pcadmin\Documents\EduardoRosales\Data\*.*','Your TIFF stack!');
     info = imfinfo(cat(2,pname,fname));
     num_images = numel(info);
     first = imread(cat(2,pname,fname), 1, 'Info', info);
@@ -90,7 +94,7 @@ if ftype==1
 else
     % Open image sequence using gui 
     disp('Select the directory of your image sequence (must not be RGB)')
-    mydir=uigetdir('C:\','Your image sequence!');            %use graphical user interface to set file path in mydir
+    mydir=uigetdir('C:\Users\pcadmin\Documents\EduardoRosales\Data\','Your image sequence!');            %use graphical user interface to set file path in mydir
     dirlist=dir(strcat(mydir,filesep,'*.tif'));                    %save file path in structure array
     first=imread(strcat(mydir,filesep,dirlist(1).name));           %pull out first image from stack
     size_first=size(first);                                        %get size of first image to preallocate space for imported images
@@ -122,8 +126,10 @@ end
 if img1==2
     % find average image using first quarter of stack
     num2avg=round(num_images/4);
-    if num2avg > 200 % but not more than 200 images
-       num2avg=200; 
+    if num2avg > 500 % but not more than 200 images. 
+        %edited by ERJ: I added 500 imgs to capture cells inactive during
+        %thefirst 200 pics
+       num2avg=500; 
     end
     
 %     if enoughMem %analyse stack
@@ -203,7 +209,9 @@ if loadrois % get saved rois
             end
         end    
         rois{i}=impoly(gca,fulllist(round(1:step1:size(fulllist,1)),:),'closed',true);
+%         test=impoly(gca,fulllist(round(1:step1:size(fulllist,1)),:),'closed',true);
         setVerticesDraggable(rois{i},false);
+%         setVerticesDraggable(test,false);
         waitbar(i/numrois,hh2)
        
     end
@@ -326,12 +334,21 @@ intensity=zeros(numrois,num_images); %preallocate
 % end
 % 
 % else %need to load each file and process it
+%note:we need to re-sort dirlist, to deal with problem of file sorting 
+%following ascii criteria(1999,10000,...,2000). 
+%lines included by ERJ, 10.02.2015.
+%I'll call extern.func. nat_sort and leave older lines untouched.
+% dirlist1=dirlist;
+[dirlist,~] = sort_nat({dirlist.name}'); %dirlist changes from struct to cell
+
     h50 = waitbar(0,'Calculating...');
     for i=1:num_images
         if ftype==1
             img = imread(cat(2,pname,fname), i, 'Info', info);
         else
-            img=imread(strcat(mydir,filesep,dirlist(i).name));
+            %img=imread(strcat(mydir,filesep,dirlist(i).name));
+            %line commented out, diff indexing for cell type.
+            img=imread(strcat(mydir,filesep,dirlist{i}));
         end
         
         maskedmat=img(labelog);
@@ -341,9 +358,7 @@ intensity=zeros(numrois,num_images); %preallocate
         waitbar(i/num_images,h50)
     end
     close(h50);
-    
 % end
-
 
 toc
 
@@ -509,7 +524,7 @@ if dodff
         %draw baseline regions in green
         hold on, plot(time(xmin:xmax), transpose(offsetraw(rowscontained,xmin:xmax)),'g')
     end
- 
+ close(rawtraces);
     %% choose dF/F method
     disp(' ');
     disp('Choose dF/F calculation method: ');
