@@ -61,7 +61,7 @@ m2i_DataPack=cat(1,m2i_DataHeader,m2i_Data);
 % Loop through and copy ROI data
 for i=1:m2i_nCols
     %m2i_Data=[];
-    m2i_Data=rois{1}.Position;
+    m2i_Data=rois{i}.Position;
     
     % Data Header
     m2i_DataHeader(1)=size(m2i_Data,1);

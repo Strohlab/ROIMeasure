@@ -262,26 +262,33 @@ if loadrois
     end
     delete(firstROI);
     
+    if correct_drift
+        choice=questdlg('what do you want to use?','Drift Correction',...
+    'Manually place each ROI','Automatic drift correction','Cancel','Manually place each ROI');
+    end
     
     hh2 = waitbar(0,'Loading ROIs...');
 
     for i=1:numrois
         if correct_drift
-            error('Not done!!');
-        fulllist=rois{i}.getPosition();
-        fulllist=fulllist+repmat(drift,size(fulllist,1),1); % correct for drift
-        % aim for 40 points in each roi
-        if size(fulllist,1)<40
-            step1=1;
-        else
-            if size(fulllist,1)>300 %unless there are hella points
-                step1=size(fulllist,1)/100;
-            else
-                step1=size(fulllist,1)/40;
+            switch choice
+                case 'Manually place each ROI'
+                    xlabel({'Move the ROI to a new location.';'Double-click the ROI to continue.'});
+                    rois{i} = images.roi.Freehand(gca,'Position',rois{i}.Position);
+                    rois{i}.Label = num2str(i);
+                    wait(rois{i});
+                    rois{i}.Waypoints = false(size(rois{i}.Waypoints));
+                    rois{i}.Color = 'w';
+                case 'Automatic drift correction'
+                    oldROI = rois;
+                    rois{i} = images.roi.Freehand(gca,'Position',(rois{i}.Position+drift));
+                    rois{i}.Label = num2str(i);
+                    rois{i}.Waypoints = false(size(rois{i}.Waypoints));
+                    rois{i}.Color = 'w';
+                case 'Cancel'
+                    disp('User canceled');
+                return
             end
-        end    
-        rois{i}=impoly(gca,fulllist(round(1:step1:size(fulllist,1)),:),'closed',true);
-        setVerticesDraggable(rois{i},false);
         else
             rois{i}.Parent= gca;
         end
@@ -319,7 +326,7 @@ while thisisok == 0 % get rois until user is satisfied with them
         'When done, Shift-click inside the image.' ...
         'and then click outside the image'},'Instructions'));
     else
-        xlabel('Press Esc to undo. To finish, Shift-click inside the image, then click outside it');
+        xlabel('Press Esc to undo. To finish click outside of the image.');
         i = numrois+1;
     end
     maxX=get(gca,'XLim');
