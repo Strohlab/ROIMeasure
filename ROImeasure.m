@@ -6,12 +6,12 @@
 % Fill the following parameters to skip the question dialogs
 % or leave empty to show the prompts
 
-pathName='';    % keep track of selected directory
+pathName='F:\1 Round';    % keep track of selected directory
 
 ftype=2; %1=TIFF stack  2=image sequence
-img1=0; %1=create average image     2=choose existing image
-imgWidthMicron=0; %image width in microns
-hz=0; %imaging frequency
+img1=1; %1=create average image     2=choose existing image
+imgWidthMicron=458; %image width in microns
+hz=30.8; %imaging frequency
 
 
 %% Data Loading
@@ -37,7 +37,7 @@ if loadrois
     disp('Select your saved ROI .mat file');
     isDone=0;
     while ~isDone
-        [fname1 path1]=uigetfile('*.mat','Select the MATLAB file containing the ROIs');
+        [fname1 path1]=uigetfile(strcat(pathName,'\*.mat'),'Select the MATLAB file containing the ROIs');
         if ~fname1
             disp('User canceled');
             return
@@ -290,7 +290,12 @@ if loadrois
                 return
             end
         else
-            rois{i}.Parent= gca;
+            %rois{i}.Parent= gca;
+            oldROI = rois;
+            rois{i} = images.roi.Freehand(gca,'Position',(rois{i}.Position));
+            rois{i}.Label = num2str(i);
+            rois{i}.Waypoints = false(size(rois{i}.Waypoints));
+            rois{i}.Color = 'w';
         end
         waitbar(i/numrois,hh2)
        
@@ -564,7 +569,7 @@ if dodff
         disp(cat(2,num2str(sum(baselines(:,2)==0)),' trace(s) remain(s)'));
         numrects=numrects+1;
         rectangs=imrect;
-        %trash=input('Adjust the rectangle if you want, then hit Enter when ready');
+        trash=input('Adjust the rectangle if you want, then hit Enter when ready');
         rectcoords=rectangs.getPosition();
         xmin=rectcoords(1);
         xmax=rectcoords(1)+rectcoords(3);
