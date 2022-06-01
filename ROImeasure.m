@@ -1,4 +1,5 @@
 %% ROI time measurement and dF/F tool
+% Version 4.1
 % Stroh-Lab
 % Zeke Barger, Hirofumi Watari, Saleh Altahini
 
@@ -6,19 +7,19 @@
 % Fill the following parameters to skip the question dialogs
 % or leave empty to show the prompts
 
-pathName='F:\1 Round';    % keep track of selected directory
+pathName='F:\2 Round\';    % keep track of selected directory
 
 ftype=2; %1=TIFF stack  2=image sequence
-img1=1; %1=create average image     2=choose existing image
+img1=1; %1=choose existing image     2=create average image
 imgWidthMicron=458; %image width in microns
 hz=30.8; %imaging frequency
-
+savePlots = 1; % change to 0 to not save the plots and figures
 
 %% Data Loading
 
 
 rois={};        % empty table to load ROIs into
-
+chosenRoi=0;
 loadrois=[];
 choice=questdlg('How do you want to start?','Region of interest',...
     'Draw new ROIs','Load saved ROIs','Cancel','Draw new ROIs');
@@ -60,7 +61,7 @@ end
 disp(' ');
 if ftype==1
     disp('Select your TIFF stack');
-    [fname,pname]=uigetfile('*.*','Your TIFF stack!');
+    [fname,pname]=uigetfile(strcat(pathName,'*.*'),'Your TIFF stack!');
     info = imfinfo(cat(2,pname,fname));
     num_images = numel(info);
     first = imread(cat(2,pname,fname), 1, 'Info', info);
@@ -243,18 +244,35 @@ if loadrois
     colormap(gray);
     imagesc(first2);
     axis image;
-
-    firstROI=images.roi.Freehand(gca,'Position',rois{1}.Position);
+    if chosenRoi==0
+        prompt = {'Alignment ROI'};
+        dlg_title = 'Which ROI to align?';
+        num_lines = 1;
+        def = {num2str(chosenRoi)};
+        answer = inputdlg(prompt,dlg_title,num_lines,def);
+        if ~isempty(answer)
+            chosenRoi=str2double(answer{1});
+            % Reject out-of-range errors
+            if chosenRoi>0
+                isDone=1;
+            end
+        else
+            disp('User canceled');
+            return
+        end
+    end
+    firstROI=images.roi.Freehand(gca,'Position',rois{chosenRoi}.Position);
     set(gca,'XTickLabel',[]);
     set(gca,'XTick',[]);
     set(gca,'YTickLabel',[]);
     set(gca,'YTick',[]);
+    set(gcf,'Color',[0 0 0]);
     xlabel({'Optionally move ROI #1 to a new location.';'Double-click the ROI when done.'});
     ddd=get(gcf,'Position'); % make the figure window play nice
     wait(firstROI);
-    if firstROI.Position ~= rois{1}.Position
+    if firstROI.Position ~= rois{chosenRoi}.Position
         correct_drift = true;
-        firstP = rois{1}.Position;
+        firstP = rois{chosenRoi}.Position;
         firstP2=firstROI.Position;
         drift=[firstP2(1,1)-firstP(1,1) firstP2(1,2)-firstP(1,2)]; % change in position
     else
@@ -305,6 +323,9 @@ if loadrois
 
     pause(.1)
 end
+
+%% mew rois
+
 thisisok = 0;
 while thisisok == 0 % get rois until user is satisfied with them
     % measure intensity in rois       
@@ -313,6 +334,7 @@ while thisisok == 0 % get rois until user is satisfied with them
         colormap(gray);
         imagesc(first2);
         axis image;
+        set(gcf,'Color',[0 0 0]);
         set(gca,'XTickLabel',[]);
         set(gca,'XTick',[]);
         set(gca,'YTickLabel',[]);
@@ -364,6 +386,8 @@ while thisisok == 0 % get rois until user is satisfied with them
                 end
                 
             else
+                disp(size(rois{i}.Position));
+                disp(intersect(rois{i}.Position, [maxX, maxY]));
                 rois{i}.Waypoints = false(size(rois{i}.Waypoints));
                 rois{i}.Label = num2str(i);
                 i=i+1;
@@ -389,7 +413,7 @@ while thisisok == 0 % get rois until user is satisfied with them
 end
     
 
-    
+%% Save ROIs
 saverois=[];
 choice=questdlg('Save the ROIs?','Save','Yes');
 switch choice
@@ -403,9 +427,10 @@ switch choice
         disp('User canceled');
         return
 end
-    
+
 if saverois
-    uisave('rois',strcat(baseFileName,'.mat'));
+    [~,roisPath]=uiputfile(strcat(pathName,filesep,baseFileName,'.txt'),'Save for Igor Pro');
+    save(strcat(roisPath,baseFileName,'.mat'),'rois');
     disp(['ROI saved as ',strcat(baseFileName,'.mat')]);
 end
 
@@ -459,7 +484,16 @@ close(h3)
 
 time=(0:1:num_images-1)/hz;
 
-    pmeth = 1;
+pmeth = 1;
+
+%% save roi figure
+
+if savePlots && saverois
+    set(gcf, 'Position', get(0, 'Screensize'));
+    saveas(gcf,strcat(roisPath,'rois.fig'));
+    saveas(gcf,strcat(roisPath,'rois.png'));
+    disp(['ROI saved as ',strcat(pathName,filesep,'rois')]);
+end
 
 %% plot traces
 offset=[];
@@ -487,7 +521,7 @@ offset=[];
     
     % new plot code
     zoom reset
- 
+
     % add scroll and zoom buttons on each axis
     bp = uipanel('Position',[0 0 1 .05]);
     rp = uipanel('Position',[.95 0.05 .05 .95]);
@@ -751,7 +785,7 @@ if saving ~=4
 
     
     % New UI by Hiro (vers 2C)
-    [fname,pname,filterIndex]=uiputfile(strcat(baseFileName,'.txt'),'Save for Igor Pro');
+    [fname,tracesPath,filterIndex]=uiputfile(strcat(pathName,filesep,baseFileName,'.txt'),'Save for Igor Pro');
     if filterIndex==0
         disp('User canceled');
         return
@@ -760,27 +794,35 @@ if saving ~=4
     fname=baseFileName;
     
     curdir=cd;
-    cd(pname)
+    cd(tracesPath)
     if saving==1 || saving==3
         dlmwrite(strcat(fname,'_original.txt'), intensity', 'delimiter','\t','newline','pc');
-        disp([strcat(fname,'_original.txt'),' saved in ',pname]);
+        disp([strcat(fname,'_original.txt'),' saved in ',tracesPath]);
         
         % Mat2Igor binary by Hiro (vers 3)
         HiroMat2Igor(fname,hz,0,intensity,imgWidthMicron,imgWidth,imgHeight,rois);
     end
     if saving==2 || saving==3
         dlmwrite(strcat(fname,'_dFoverF.txt'), delf', 'delimiter','\t','newline','pc');
-        disp([strcat(fname,'_dFoverF.txt'),' saved in ',pname]);
+        disp([strcat(fname,'_dFoverF.txt'),' saved in ',tracesPath]);
         
         HiroMat2Igor(fname,hz,1,delf,imgWidthMicron,imgWidth,imgHeight,rois);
     end
     cd(curdir)
 end
 
+%% save trace figure
+if savePlots
+    set(gcf, 'Position', get(0, 'Screensize'));
+    saveas(gcf,strcat(tracesPath,'trace.fig'));
+    saveas(gcf,strcat(tracesPath,'trace.png'));
+    disp(['trace plot saved as ',strcat(pathName,filesep,'trace')]);
+end
+%% clean up
 clear asdf aa bb cc maskedmat stack totalmask %clean up larger matrices
 clear a1 a2 baseFileName baselineframes baselines blf bottom buffer choice ddd dirlist % and other junk
 clear barsize blavg blpts bp denominator dffmeth h50 h60 img maxspace ministack
-clear newdenom quitcount roitext def dlg_title ext
+clear newdenom quitcount roitext def dlg_title ext savePlots
 clear dodff first first2 newimg ftype fname2 h i img1 imgFrom imgTo info2 isDone j fname1 blah1 blah2 fcn
 clear labelimg labelog labelpx loadrois mask2 maskedvec mydir num2avg
 clear num_images2 numrects offset overbottom path1 pixels pmeth pname2
